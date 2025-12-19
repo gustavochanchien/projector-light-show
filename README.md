@@ -4,7 +4,7 @@ A browser-based, real-time **projector / light-show visualizer** inspired by **B
 
 This version is designed to run entirely in the browser, making it easy to deploy, customize, and control from laptops or tablets connected to projectors.
 
-View it at: [https://github.com/gustavochanchien/projector-light-show](https://github.com/gustavochanchien/projector-light-show) 
+View it at: [https://gustavochanchien.github.io/projector-light-show/](https://gustavochanchien.github.io/projector-light-show/) 
 
 > Based on **Blaize V3**
 > Original project: [https://github.com/bodgedbutworks/Blaize_V3](https://github.com/bodgedbutworks/Blaize_V3) 
