@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projector Light Show</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="main"></canvas>
+
+  <aside class="panel" id="panel" aria-label="Control panel">
+    <div class="row" style="justify-content: space-between;">
+      <div>
+        <div class="title">Projector Light Show</div>
+        <div class="hint">Preset changes are instant. Motion path blends: circle/square/triangle. Press <span class="kbd">H</span> to hide/show panel. <span style="color: rgba(232, 247, 255, 0.65);">Based on Blaize V3 by BodgedButWorks.</span></div>
+      </div>
+      <div class="row">
+        <button id="btnFS">Fullscreen</button>
+        <button id="btnPop">Pop-out</button>
+        <button class="primary" id="btnMic">Mic</button>
+        <div class="pill" id="capPill">Mic: …</div>
+      </div>
+    </div>
+
+    <div class="row" style="justify-content: space-between;">
+      <div class="row">
+        <button class="toggle" id="btnMulti">Multicolor</button>
+        <button class="toggle danger" id="btnBlackout">Blackout</button>
+        <button class="toggle" id="btnBpm">BPM</button>
+        <button class="toggle" id="btnBeat">Beat DJ</button>
+
+        <label class="pill" title="Move the entire preset along a path">
+          <span>Motion</span>
+          <select id="motionSel" aria-label="Motion path">
+            <option value="off">Off</option>
+            <option value="circle">Circle</option>
+            <option value="square">Square</option>
+            <option value="triangle">Triangle</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="scrollArea" id="scrollArea">
+      <div class="section">
+        <div class="sectionTitle">
+          <span>Presets (0–31)</span>
+          <span class="hint">Scroll</span>
+        </div>
+        <div class="grid" id="presetGrid"></div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">
+          <span>Colors</span>
+        </div>
+
+        <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+          <div class="row">
+            <div class="seg" role="group" aria-label="Color target">
+              <button id="pickA" type="button" class="on">Pick A</button>
+              <button id="pickB" type="button">Pick B</button>
+            </div>
+          </div>
+          <button id="btnSwap" type="button" title="Swap color A and B">Swap</button>
+        </div>
+
+        <div class="colors" id="colorGrid" aria-label="Color buttons"></div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">
+          <span>Beat DJ</span>
+          <span class="hint">Uses Mic/Demo audio. Changes colors/presets when beats are detected.</span>
+        </div>
+
+        <div class="row" style="margin-bottom: 8px;">
+          <span class="pill" style="gap:10px; flex: 1 1 auto;">
+            <span>Input</span>
+            <div class="meter" aria-label="Input level">
+              <div class="meterFill" id="energyFill"></div>
+              <div class="meterBeat" id="beatDot" title="Beat"></div>
+            </div>
+          </span>
+        </div>
+
+        <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+          <div class="row">
+            <button class="toggle" id="btnBeatColor">Auto Color</button>
+            <button class="toggle" id="btnBeatPreset">Auto Preset</button>
+          </div>
+          <label class="pill" title="How often to change presets when Beat DJ is on">
+            <span>Preset every</span>
+            <select id="beatEvery" aria-label="Preset change interval">
+              <option value="1">1 beat</option>
+              <option value="2">2 beats</option>
+              <option value="4" selected>4 beats</option>
+              <option value="8">8 beats</option>
+              <option value="16">16 beats</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="sliders">
+          <div class="slider"><label for="micGain">Mic Sensitivity</label><input id="micGain" type="range" min="0" max="200" step="1" value="80" /><output id="micGainOut">2.30×</output></div>
+          <div class="slider"><label for="beatSens">Beat Sensitivity</label><input id="beatSens" type="range" min="0" max="100" step="1" value="70" /><output id="beatSensOut">70</output></div>
+          <div class="slider"><label for="beatCool">Cooldown</label><input id="beatCool" type="range" min="80" max="420" step="5" value="160" /><output id="beatCoolOut">160ms</output></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">
+          <span>Controls</span>
+        </div>
+
+        <div class="sliders">
+          <div class="slider"><label for="speed">Speed</label><input id="speed" type="range" min="0" max="100" step="1" value="30" /><output id="speedOut">30</output></div>
+          <div class="slider"><label for="size">Size</label><input id="size" type="range" min="0" max="100" step="1" value="50" /><output id="sizeOut">50</output></div>
+          <div class="slider"><label for="strobe">Strobing</label><input id="strobe" type="range" min="0" max="100" step="1" value="0" /><output id="strobeOut">0</output></div>
+          <div class="slider"><label for="shade">Trails</label><input id="shade" type="range" min="0" max="100" step="1" value="0" /><output id="shadeOut">0</output></div>
+          <div class="slider"><label for="bpm">BPM</label><input id="bpm" type="range" min="60" max="180" step="1" value="128" /><output id="bpmOut">128</output></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status" id="status">Ready. Tips: aim projector through haze, keep backgrounds black, press <span class="kbd">H</span> to hide panel.</div>
+  </aside>
+
+  <script defer src="presets.js" defer></script>
+  <script defer src="app.js"></script>
+</body>
+</html>

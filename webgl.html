@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Projector Light Show</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #fff;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    .setup-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, rgba(70,190,255,0.25), transparent 55%), rgba(0,0,0,0.9);
+      text-align: center;
+      padding: 32px;
+      z-index: 10;
+    }
+    .setup-overlay.hidden {
+      display: none;
+    }
+    .setup-overlay h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #46beff;
+    }
+    .setup-overlay p {
+      max-width: 520px;
+      margin: 0 0 24px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    .setup-overlay button {
+      background: #46beff;
+      color: #000;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 0 24px rgba(70,190,255,0.5);
+    }
+    .setup-overlay button:hover {
+      filter: brightness(1.1);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div class="setup-overlay" id="setup">
+    <h1>Light Show</h1>
+    <p>Drag this window to your projector or secondary screen. When you are ready, open the control window on your main display.</p>
+    <button id="launchControls">Open Controls Window</button>
+  </div>
+
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec2 a_pos;
+    void main() {
+      gl_Position = vec4(a_pos, 0.0, 1.0);
+    }
+  </script>
+
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform vec2 u_res;
+    uniform float u_time;
+    uniform float u_trans;
+    uniform int u_from;
+    uniform int u_to;
+    uniform float u_size;
+    uniform float u_speed;
+    uniform vec3 u_colA;
+    uniform vec3 u_colB;
+    uniform float u_audio;
+    uniform bool u_multi;
+    uniform vec2 u_offset;
+    uniform float u_glow;
+
+    float sdCircle(vec2 p, float r) {
+      return length(p) - r;
+    }
+
+    float sdBox(vec2 p, vec2 b) {
+      vec2 d = abs(p) - b;
+      return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+    }
+
+    float sdTri(vec2 p, float r) {
+      const float k = 1.73205;
+      p.x = abs(p.x) - r;
+      p.y = p.y + r / k;
+      if (p.x + k * p.y > 0.0) {
+        p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;
+      }
+      p.x -= clamp(p.x, -2.0 * r, 0.0);
+      return -length(p) * sign(p.y);
+    }
+
+    vec3 hsv2rgb(vec3 c) {
+      vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+      vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+      return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }
+
+    // Central circle with smaller circles orbiting around it
+    float getOrbitShape(vec2 p) {
+      float t = u_time * u_speed;
+
+      // Base center circle
+      float d = sdCircle(p, 0.35 * u_size + 0.15);
+
+      // Orbiting circles
+      const int N = 10;
+      float ringR = 0.6 + 0.4 * u_size;
+      float smallR = 0.1 * u_size + 0.05;
+      for (int i = 0; i < N; i++) {
+        float a = (6.2831853 / float(N)) * float(i) + t * 2.0;
+        vec2 c = vec2(cos(a), sin(a)) * ringR;
+        float di = sdCircle(p - c, smallR);
+        d = min(d, di);
+      }
+      return d;
+    }
+
+    float getS(int id, vec2 p) {
+      float s = max(0.2, u_size);
+      float t = u_time * u_speed;
+
+      // 0: circle
+      if (id == 0) {
+        return sdCircle(p, s * 0.8);
+      }
+
+      // 1: box
+      if (id == 1) {
+        float ang = 0.2 * sin(t * 0.5);
+        float cs = cos(ang);
+        float sn = sin(ang);
+        mat2 R = mat2(cs, -sn, sn, cs);
+        vec2 q = R * p;
+        return sdBox(q, vec2(s * 0.7));
+      }
+
+      // 2: triangle
+      if (id == 2) {
+        float ang = 0.5 * sin(t * 0.7);
+        float cs = cos(ang);
+        float sn = sin(ang);
+        mat2 R = mat2(cs, -sn, sn, cs);
+        vec2 q = R * p;
+        return sdTri(q, s * 0.8);
+      }
+
+      // 3: sine wave
+      if (id == 3) {
+        float y = sin(p.x * 6.0 + t * 4.0) * (0.35 * s);
+        return abs(p.y - y) - 0.03;
+      }
+
+      // 4: warp tunnel
+      if (id == 4) {
+        float r = length(p);
+        float waves = sin(12.0 * r - t * 5.0);
+        return waves - 0.4;
+      }
+
+      // 5: orbits
+      if (id == 5) {
+        return getOrbitShape(p);
+      }
+
+      // 6: horizontal scanlines
+      if (id == 6) {
+        float freq = 12.0 + u_size * 20.0;
+        float scroll = t * 3.0;
+        float v = sin(p.y * freq + scroll);
+        return abs(v) - 0.15;
+      }
+
+      // 7: vertical scanlines
+      if (id == 7) {
+        float freq = 12.0 + u_size * 20.0;
+        float scroll = t * 3.0;
+        float v = sin(p.x * freq + scroll);
+        return abs(v) - 0.15;
+      }
+
+      // 8: dot grid
+      if (id == 8) {
+        float scale = 3.0 + u_size * 4.0;
+        vec2 g = p * scale;
+        vec2 cell = fract(g) - 0.5;
+        float radius = 0.22;
+        return length(cell) - radius;
+      }
+
+      // 9: offset / staggered dot grid
+      if (id == 9) {
+        float scale = 3.0 + u_size * 4.0;
+        vec2 g = p * scale;
+        float row = floor(g.y);
+        g.x += mod(row, 2.0) * 0.5; // offset every other row
+        vec2 cell = fract(g) - 0.5;
+        float radius = 0.22;
+        return length(cell) - radius;
+      }
+
+      return sdCircle(p, s * 0.8);
+    }
+
+    void main() {
+      vec2 p = (gl_FragCoord.xy * 2.0 - u_res) / min(u_res.x, u_res.y);
+      p -= u_offset;
+
+      float dFrom = getS(u_from, p);
+      float dTo = getS(u_to, p);
+      float t = clamp(u_trans, 0.0, 1.0);
+      float d = mix(dFrom, dTo, smoothstep(0.0, 1.0, t));
+
+      // Sharp glow: small base width, scaled lightly by u_glow
+      float glowWidth = 0.001 + u_glow * 0.002;
+      float g = 1.0 / (abs(d) / glowWidth + 1.0);
+
+      // Audio adds extra brightness
+      g += u_audio * 0.5;
+
+      vec3 colA = u_colA;
+      vec3 colB = u_colB;
+      vec3 baseCol;
+
+      if (u_multi) {
+        float stripes = 0.5 + 0.5 * sin(10.0 * atan(p.y, p.x) + u_time * 2.0);
+        baseCol = mix(colA, colB, stripes);
+      } else {
+        baseCol = colA;
+      }
+
+      vec3 color = baseCol * g;
+      gl_FragColor = vec4(color, 1.0);
+    }
+  </script>
+
+  <script>
+    // --- CONFIG ---
+    // 0..9 (Circle, Square, Triangle, Sine, Warp, Orbits, Scan H, Scan V, Dots, Dots Offset)
+    const PRESET_COUNT = 10;
+
+    const canvas = document.getElementById('view');
+    const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
+
+    if (!gl) {
+      alert('WebGL not supported on this browser.');
+    }
+
+    function compileShader(type, srcId) {
+      const src = document.getElementById(srcId).textContent;
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(sh));
+        throw new Error('Shader compile failed');
+      }
+      return sh;
+    }
+
+    const vs = compileShader(gl.VERTEX_SHADER, 'vs');
+    const fs = compileShader(gl.FRAGMENT_SHADER, 'fs');
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(prog));
+      throw new Error('Program link failed');
+    }
+    gl.useProgram(prog);
+
+    const posBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([
+        -1, -1,
+         1, -1,
+        -1,  1,
+        -1,  1,
+         1, -1,
+         1,  1
+      ]),
+      gl.STATIC_DRAW
+    );
+    const aPos = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    const locs = {
+      res: gl.getUniformLocation(prog, 'u_res'),
+      time: gl.getUniformLocation(prog, 'u_time'),
+      trans: gl.getUniformLocation(prog, 'u_trans'),
+      from: gl.getUniformLocation(prog, 'u_from'),
+      to: gl.getUniformLocation(prog, 'u_to'),
+      size: gl.getUniformLocation(prog, 'u_size'),
+      speed: gl.getUniformLocation(prog, 'u_speed'),
+      colA: gl.getUniformLocation(prog, 'u_colA'),
+      colB: gl.getUniformLocation(prog, 'u_colB'),
+      audio: gl.getUniformLocation(prog, 'u_audio'),
+      multi: gl.getUniformLocation(prog, 'u_multi'),
+      offset: gl.getUniformLocation(prog, 'u_offset'),
+      glow: gl.getUniformLocation(prog, 'u_glow')
+    };
+
+    let state = {
+      from: 0,
+      to: 0,
+      trans: 1.0,
+      size: 0.7,
+      speed: 0.3,
+      glow: 5, // very little glow by default for high-contrast projection
+      colA: [0.3, 0.7, 1.0],
+      colB: [1.0, 1.0, 1.0],
+      multi: false,
+      offset: { x: 0, y: 0 },
+      audioLevel: 0
+    };
+
+    class MicInput {
+      constructor() {
+        this.ctx = null;
+        this.analyser = null;
+        this.data = null;
+      }
+      async start() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const src = this.ctx.createMediaStreamSource(stream);
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 512;
+        this.data = new Uint8Array(this.analyser.frequencyBinCount);
+        src.connect(this.analyser);
+      }
+      stop() {
+        if (this.ctx) {
+          this.ctx.close();
+          this.ctx = null;
+          this.analyser = null;
+          this.data = null;
+        }
+      }
+      getLevel() {
+        if (!this.analyser || !this.data) return 0;
+        this.analyser.getByteFrequencyData(this.data);
+        let sum = 0;
+        for (let i = 0; i < this.data.length; i++) {
+          sum += this.data[i];
+        }
+        return sum / (this.data.length * 255);
+      }
+    }
+
+    const mic = new MicInput();
+    let micEnabled = false;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.floor(window.innerWidth * dpr);
+      const height = Math.floor(window.innerHeight * dpr);
+      canvas.width = width;
+      canvas.height = height;
+      gl.viewport(0, 0, width, height);
+      gl.uniform2f(locs.res, width, height);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let lastTime = performance.now();
+
+    function render(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (micEnabled) {
+        const level = mic.getLevel();
+        state.audioLevel = state.audioLevel * 0.8 + level * 0.2;
+      } else {
+        state.audioLevel *= 0.9;
+      }
+
+      // Smooth preset transition
+      state.trans += (1.0 - state.trans) * 0.05;
+      if (state.trans > 0.999) state.trans = 1.0;
+
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.uniform1f(locs.time, now * 0.001);
+      gl.uniform1f(locs.trans, state.trans);
+      gl.uniform1i(locs.from, state.from | 0);
+      gl.uniform1i(locs.to, state.to | 0);
+      gl.uniform1f(locs.size, state.size);
+      gl.uniform1f(locs.speed, state.speed);
+      gl.uniform3f(locs.colA, state.colA[0], state.colA[1], state.colA[2]);
+      gl.uniform3f(locs.colB, state.colB[0], state.colB[1], state.colB[2]);
+      gl.uniform1f(locs.audio, state.audioLevel);
+      gl.uniform1i(locs.multi, state.multi ? 1 : 0);
+      gl.uniform2f(locs.offset, state.offset.x, state.offset.y);
+      gl.uniform1f(locs.glow, state.glow);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+    function clampPreset(n) {
+      n = n | 0;
+      if (n < 0) n = 0;
+      if (n >= PRESET_COUNT) n = PRESET_COUNT - 1;
+      return n;
+    }
+
+    window.addEventListener('message', async (e) => {
+      const msg = e.data;
+      if (!msg) return;
+
+      if (msg.type === 'UPDATE') {
+        const payload = msg.state || {};
+
+        if (typeof payload.to === 'number') {
+          const next = clampPreset(payload.to);
+          if (next !== state.to) {
+            state.from = state.to;
+            state.to = next;
+            state.trans = 0.0;
+          }
+        }
+
+        if (typeof payload.size === 'number') state.size = payload.size;
+        if (typeof payload.speed === 'number') state.speed = payload.speed;
+        if (typeof payload.glow === 'number') state.glow = payload.glow;
+        if (Array.isArray(payload.colA)) state.colA = payload.colA;
+        if (Array.isArray(payload.colB)) state.colB = payload.colB;
+        if (typeof payload.multi === 'boolean') state.multi = payload.multi;
+      }
+
+      if (msg.type === 'MIC_TOGGLE') {
+        if (!micEnabled) {
+          try {
+            await mic.start();
+            micEnabled = true;
+          } catch (err) {
+            console.error(err);
+            alert('Could not start microphone: ' + err.message);
+          }
+        } else {
+          mic.stop();
+          micEnabled = false;
+        }
+      }
+    });
+
+    // --- CONTROL WINDOW ---
+    const setup = document.getElementById('setup');
+    const launchBtn = document.getElementById('launchControls');
+    let ctrlWin = null;
+
+    function openControls() {
+      if (ctrlWin && !ctrlWin.closed) {
+        ctrlWin.focus();
+        return;
+      }
+      ctrlWin = window.open('', 'lightShowControls', 'width=420,height=680');
+      if (!ctrlWin) return;
+
+      const doc = ctrlWin.document;
+      doc.open();
+      doc.write(`
+        <html>
+        <head>
+          <title>Light Show Controls</title>
+          <style>
+            body {
+              margin: 0;
+              padding: 16px;
+              background: #05070b;
+              color: #f4f7ff;
+              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+            h2 {
+              margin: 16px 0 8px;
+              font-size: 14px;
+              letter-spacing: 0.12em;
+              text-transform: uppercase;
+              color: #7cd5ff;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 8px;
+              margin-bottom: 12px;
+            }
+            button {
+              background: #151925;
+              border-radius: 999px;
+              border: 1px solid #262b3a;
+              color: inherit;
+              padding: 8px 10px;
+              font-size: 12px;
+              cursor: pointer;
+            }
+            button:hover {
+              background: #1f2535;
+            }
+            .row {
+              display: flex;
+              gap: 8px;
+              margin-bottom: 10px;
+              align-items: center;
+              font-size: 12px;
+            }
+            label {
+              font-size: 12px;
+            }
+            input[type="color"] {
+              border: none;
+              width: 32px;
+              height: 24px;
+              padding: 0;
+              background: transparent;
+            }
+            .slider-row {
+              display: grid;
+              grid-template-columns: 80px 1fr;
+              gap: 8px;
+              align-items: center;
+              margin-bottom: 8px;
+              font-size: 12px;
+            }
+            input[type="range"] {
+              width: 100%;
+            }
+            .section {
+              border-radius: 16px;
+              padding: 12px 12px 10px;
+              background: radial-gradient(circle at top left, rgba(124,213,255,0.06), transparent 60%), #05070b;
+              border: 1px solid #141827;
+              margin-bottom: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="section">
+            <h2>Presets</h2>
+            <div class="grid">
+              <button data-preset="0">Circle</button>
+              <button data-preset="1">Square</button>
+              <button data-preset="2">Triangle</button>
+              <button data-preset="3">Sine Wave</button>
+              <button data-preset="4">Warp Tunnel</button>
+              <button data-preset="5">Orbits</button>
+              <button data-preset="6">Scan H</button>
+              <button data-preset="7">Scan V</button>
+              <button data-preset="8">Dots</button>
+              <button data-preset="9">Dots Offset</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Color</h2>
+            <div class="row">
+              <label>Color A&nbsp;<input id="colA" type="color" value="#4cb3ff"></label>
+              <label>Color B&nbsp;<input id="colB" type="color" value="#ffffff"></label>
+            </div>
+            <div class="row">
+              <label><input id="multi" type="checkbox"> Split between A / B</label>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Settings</h2>
+            <div class="slider-row">
+              <label>Speed</label>
+              <input id="speed" type="range" min="0" max="100" value="30">
+            </div>
+            <div class="slider-row">
+              <label>Size</label>
+              <input id="size" type="range" min="10" max="100" value="70">
+            </div>
+            <div class="slider-row">
+              <label>Glow</label>
+              <input id="glow" type="range" min="0" max="50" value="5">
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Audio</h2>
+            <div class="row">
+              <button id="micBtn" style="flex:1">Toggle mic reactive</button>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+      doc.close();
+
+      const send = (state) => {
+        window.postMessage({ type: 'UPDATE', state }, '*');
+      };
+
+      const presetButtons = doc.querySelectorAll('button[data-preset]');
+      presetButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = Number(btn.getAttribute('data-preset')) || 0;
+          send({ to: id });
+        });
+      });
+
+      const colAInput = doc.getElementById('colA');
+      const colBInput = doc.getElementById('colB');
+      const multiInput = doc.getElementById('multi');
+      const speedInput = doc.getElementById('speed');
+      const sizeInput = doc.getElementById('size');
+      const glowInput = doc.getElementById('glow');
+      const micBtn = doc.getElementById('micBtn');
+
+      function hexToRgb01Local(hex) {
+        if (!hex || hex[0] !== '#') return [1, 1, 1];
+        const v = parseInt(hex.slice(1), 16);
+        return [
+          ((v >> 16) & 255) / 255,
+          ((v >> 8) & 255) / 255,
+          (v & 255) / 255
+        ];
+      }
+
+      colAInput.addEventListener('input', (e) => {
+        const rgb = hexToRgb01Local(e.target.value);
+        send({ colA: rgb });
+      });
+      colBInput.addEventListener('input', (e) => {
+        const rgb = hexToRgb01Local(e.target.value);
+        send({ colB: rgb });
+      });
+      multiInput.addEventListener('change', (e) => {
+        send({ multi: e.target.checked });
+      });
+      speedInput.addEventListener('input', (e) => {
+        send({ speed: e.target.value / 100 });
+      });
+      sizeInput.addEventListener('input', (e) => {
+        send({ size: e.target.value / 100 });
+      });
+      glowInput.addEventListener('input', (e) => {
+        send({ glow: Number(e.target.value) });
+      });
+      micBtn.addEventListener('click', () => {
+        window.postMessage({ type: 'MIC_TOGGLE' }, '*');
+      });
+
+      setup.classList.add('hidden');
+    }
+
+    launchBtn.addEventListener('click', openControls);
+  </script>
+</body>
+</html>
