@@ -9,6 +9,9 @@ View it at: [https://github.com/gustavochanchien/projector-light-show](https://g
 > Based on **Blaize V3**
 > Original project: [https://github.com/bodgedbutworks/Blaize_V3](https://github.com/bodgedbutworks/Blaize_V3) 
 
+![Projector Light Show](images/lightshow.png)
+![Projector Light Show - alt view](images/lightshow2.png)
+
 ---
 
 ## Features
