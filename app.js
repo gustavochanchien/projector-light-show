@@ -527,6 +527,82 @@
     updateToggles();
   });
 
+  // Speed
+  ui.speed?.addEventListener('input', (e) => {
+    presetSpeed = +e.target.value;
+    if (ui.speedOut) ui.speedOut.textContent = String(presetSpeed);
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Size
+  ui.size?.addEventListener('input', (e) => {
+    presetSizeDest = +e.target.value;
+    if (ui.sizeOut) ui.sizeOut.textContent = String(presetSizeDest);
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Brightness
+  ui.bright?.addEventListener('input', (e) => {
+    presetBrightnessDest = +e.target.value;
+    if (ui.brightOut) ui.brightOut.textContent = String(presetBrightnessDest);
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Motion Blend (transition speed)
+  ui.trans?.addEventListener('input', (e) => {
+    transitionSpeed = +e.target.value;
+
+    // match popout display style (ms/s) used in syncPopupDom
+    const sec = lerp(1.8, 0.10, clamp(transitionSpeed / 100, 0, 1));
+    const ms = Math.round(sec * 1000);
+    if (ui.transOut) ui.transOut.textContent = (ms >= 1000) ? ((ms / 1000).toFixed(2) + 's') : (ms + 'ms');
+
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Beat: Mic Sensitivity (0..200 UI -> micGain multiplier)
+  ui.micGain?.addEventListener('input', (e) => {
+    micGainVal = +e.target.value;
+    micGain = micGainFromUI(micGainVal);
+    if (ui.micGainOut) ui.micGainOut.textContent = micGain.toFixed(2) + '×';
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Beat: Beat Sensitivity (0..100)
+  ui.beatSens?.addEventListener('input', (e) => {
+    beatSens = +e.target.value;
+    if (ui.beatSensOut) ui.beatSensOut.textContent = String(beatSens);
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Beat: Cooldown (ms)
+  ui.beatCool?.addEventListener('input', (e) => {
+    beatCooldownMs = +e.target.value;
+    if (ui.beatCoolOut) ui.beatCoolOut.textContent = String(beatCooldownMs) + 'ms';
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Beat: Preset every (select)
+  ui.beatEvery?.addEventListener('change', (e) => {
+    beatEveryN = parseInt(e.target.value, 10) || 4;
+    try { sendStateToPopup?.(true); } catch {}
+  });
+
+  // Optional: initialize outputs once on load (so UI matches state)
+  (function initSliderOutputs(){
+    if (ui.speedOut) ui.speedOut.textContent = String(presetSpeed);
+    if (ui.sizeOut) ui.sizeOut.textContent = String(presetSizeDest);
+    if (ui.brightOut) ui.brightOut.textContent = String(presetBrightnessDest);
+
+    if (ui.micGainOut) ui.micGainOut.textContent = (micGain || micGainFromUI(micGainVal)).toFixed(2) + '×';
+    if (ui.beatSensOut) ui.beatSensOut.textContent = String(beatSens);
+    if (ui.beatCoolOut) ui.beatCoolOut.textContent = String(beatCooldownMs) + 'ms';
+
+    const sec = lerp(1.8, 0.10, clamp(transitionSpeed / 100, 0, 1));
+    const ms = Math.round(sec * 1000);
+    if (ui.transOut) ui.transOut.textContent = (ms >= 1000) ? ((ms / 1000).toFixed(2) + 's') : (ms + 'ms');
+  })();
+
   // Color buttons
   const colorButtons = [
     { name: 'R',   c: COLORS.red },

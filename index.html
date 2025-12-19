@@ -13,7 +13,11 @@
     <div class="row" style="justify-content: space-between;">
       <div>
         <div class="title">Projector Light Show</div>
-        <div class="hint">Preset changes are instant. Motion path blends: circle/square/triangle. Press <span class="kbd">H</span> to hide/show panel. <span style="color: rgba(232, 247, 255, 0.65);">Based on Blaize V3 by BodgedButWorks.</span></div>
+        <div class="hint">
+          Preset changes are instant. Motion path blends: circle/square/triangle.
+          Press <span class="kbd">H</span> to hide/show panel.
+          <span style="color: rgba(232, 247, 255, 0.65);">Based on Blaize V3 by BodgedButWorks.</span>
+        </div>
       </div>
       <div class="row">
         <button id="btnFS">Fullscreen</button>
@@ -42,13 +46,18 @@
       </div>
     </div>
 
+    <!-- IMPORTANT: scrollArea no longer scrolls -->
     <div class="scrollArea" id="scrollArea">
-      <div class="section">
+      <div class="section presetsSection">
         <div class="sectionTitle">
           <span>Presets (0–31)</span>
           <span class="hint">Scroll</span>
         </div>
-        <div class="grid" id="presetGrid"></div>
+
+        <!-- IMPORTANT: this wrapper is the ONLY scroll container -->
+        <div class="presetScroll">
+          <div class="grid" id="presetGrid"></div>
+        </div>
       </div>
 
       <div class="section">
@@ -124,10 +133,12 @@
       </div>
     </div>
 
-    <div class="status" id="status">Ready. Tips: aim projector through haze, keep backgrounds black, press <span class="kbd">H</span> to hide panel.</div>
+    <div class="status" id="status">
+      Ready. Tips: aim projector through haze, keep backgrounds black, press <span class="kbd">H</span> to hide panel.
+    </div>
   </aside>
 
-  <script defer src="presets.js" defer></script>
+  <script defer src="presets.js"></script>
   <script defer src="app.js"></script>
 </body>
 </html>
